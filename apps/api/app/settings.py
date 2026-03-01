@@ -1,12 +1,20 @@
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-BASE_DIR = Path(__file__).resolve().parents[3]  # project root
+
+# Walk up from this file to find a .env (local dev).
+# In Docker, env vars are injected directly so no file is needed.
+def _find_env_file() -> str | None:
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / ".env"
+        if candidate.exists():
+            return str(candidate)
+    return None
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=str(BASE_DIR / ".env"),  # looks for apps/api/.env
+        env_file=_find_env_file(),
         case_sensitive=False,
         extra="ignore",
     )
