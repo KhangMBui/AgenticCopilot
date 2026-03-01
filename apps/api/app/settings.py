@@ -23,5 +23,8 @@ class Settings(BaseSettings):
     redis_host: str = "redis"
     redis_port: int = 6379
 
+    # OpenAI API key for embeddings
+    openai_api_key: str
+
 
 settings = Settings()
