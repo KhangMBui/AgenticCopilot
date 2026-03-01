@@ -17,6 +17,8 @@ from app.schemas.documents import (
     DocumentListQuery,
 )
 from core.chunking import chunk_text
+from core.embeddings import OpenAIEmbeddingsClient
+from app.settings import settings
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/docs", tags=["documents"])
 
@@ -68,14 +70,20 @@ def create_document(
     # Chunk content
     chunk_results = chunk_text(text=request.content, chunk_size=1000, chunk_overlap=200)
 
-    # Create chunk records:
-    for chunk_result in chunk_results:
+    # Generate embeddings for all chunks
+    embeddings_client = OpenAIEmbeddingsClient(api_key=settings.openai_api_key)
+    texts = [cr.content for cr in chunk_results]
+    embeddings = embeddings_client.embed_batch(texts)
+
+    # Create chunk records with embeddings:
+    for chunk_result, embedding in zip(chunk_results, embeddings):
         chunk = Chunk(
             document_id=doc.id,
             content=chunk_result.content,
             chunk_index=chunk_result.chunk_index,
             start_char=chunk_result.start_char,
             end_char=chunk_result.end_char,
+            embedding=embedding,
         )
         db.add(chunk)
 
