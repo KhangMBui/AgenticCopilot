@@ -11,6 +11,6 @@ COPY apps/api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY apps/api/ .
-COPY core/ core/
+# COPY core/ core/   # core/ moved into apps/api/, included by line above
 
 EXPOSE 8000

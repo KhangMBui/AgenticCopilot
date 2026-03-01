@@ -35,8 +35,8 @@ services:
       DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}"
     volumes:
       - ./apps/api:/app
-      - ./core:/app/core
-      - ./tests:/app/tests
+      # - ./core:/app/core
+      # - ./tests:/app/tests
     depends_on:
       postgres:
         condition: service_healthy
