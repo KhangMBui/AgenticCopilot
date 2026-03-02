@@ -11,8 +11,12 @@ class Workspace(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
+    # Relationships
     documents: Mapped[list["Document"]] = relationship(  # noqa: F821
         back_populates="workspace", cascade="all, delete-orphan"
     )
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    conversations: Mapped[list["Conversation"]] = relationship(
+        back_populates="workspace", cascade="all, delete-orphan"
+    )
