@@ -24,6 +24,9 @@ from __future__ import annotations
 # means ONLY those 3 strings are valid return values.
 from typing import Literal
 
+# LLM importation from LangChain, used to extract and polish the final message.
+from langchain_openai import ChatOpenAI
+
 # AIMessage is the message object used in LangChain / LangGraph conversation history.
 from langchain_core.messages import AIMessage
 
@@ -116,15 +119,58 @@ def create_supervisor_node():
     return supervisor_node
 
 
+def create_writer_node(api_key: str):
+    llm = ChatOpenAI(model="gpt-4o-mini", api_key=api_key, temperature=0)
+
+    def writer_node(state: MultiAgentState) -> dict:
+        draft = state.get("draft_answer") or ""
+        query = state["query"]
+
+        prompt = f"""
+        You are a synthesis writer.
+        Task: answer the user's question clearly using ONLY the grounded draft below.
+
+        User question:
+        {query}
+
+        Grounded draft:
+        {draft}
+
+        Rules:
+        - Do not add new facts not present in the draft.
+        - Keep concise, structured, and direct.
+        - If data is missing, say so explicitly.
+        """
+
+        msg = llm.invoke(prompt)
+        final = (msg.content or "").strip() if hasattr(msg, "content") else str(msg)
+
+        if not final:
+            final = draft or "No grounded answer available."
+
+        return {
+            "final_answer": final,
+            "messages": [AIMessage(content=final)],
+            "trace": [
+                {
+                    "node": "writer",
+                    "step": state.get("step_count", 0),
+                    "success": True,
+                }
+            ],
+        }
+
+    return writer_node
+
+
 def finish_node(state: MultiAgentState) -> dict:
     """
     Phase 4 finish node: grounded aggregation.
     """
-    final = compose_grounded_answer(state)
+    draft = compose_grounded_answer(state)
 
     return {
-        "final_answer": final,
-        "messages": [AIMessage(content=final)],
+        "draft_answer": draft,
         "trace": [
             {
                 "node": "finish",
@@ -156,6 +202,7 @@ def create_multi_agent_graph(
     db: Session,
     embeddings: OpenAIEmbeddingsClient,
     workspace_id: int,
+    api_key: str,
 ):
     """
     Builds and compiles the full multi-agent graph.
@@ -184,6 +231,9 @@ def create_multi_agent_graph(
     # Create the math worker node
     math = create_math_worker()
 
+    # Create the writer node
+    writer = create_writer_node(api_key=api_key)
+
     # Build a graph whose shared state structure is MultiAgentState
     graph = StateGraph(MultiAgentState)
 
@@ -192,6 +242,7 @@ def create_multi_agent_graph(
     graph.add_node("research", research)
     graph.add_node("math", math)
     graph.add_node("finish", finish_node)
+    graph.add_node("writer", writer)
 
     # Graph always begins at supervisor
     graph.add_edge(START, "supervisor")
@@ -212,8 +263,11 @@ def create_multi_agent_graph(
     # After math finishes, go back to supervisor
     graph.add_edge("math", "supervisor")
 
-    # After finish node runs, the graph ends
-    graph.add_edge("finish", END)
+    # After finish node runs, pass it to writer node so it could polish the final response
+    graph.add_edge("finish", "writer")
+
+    # After writer node runs, end
+    graph.add_edge("writer", END)
 
     # Compile into an executable LangGraph app
     return graph.compile()
@@ -224,6 +278,7 @@ def run_multi_agent(
     db: Session,
     embeddings: OpenAIEmbeddingsClient,
     workspace_id: int,
+    api_key: str,
     max_steps: int = 8,
 ) -> dict:
     """
@@ -238,7 +293,7 @@ def run_multi_agent(
 
     # Build the compiled LangGraph app
     app = create_multi_agent_graph(
-        db=db, embeddings=embeddings, workspace_id=workspace_id
+        db=db, embeddings=embeddings, workspace_id=workspace_id, api_key=api_key
     )
 
     # Create the starting graph state

@@ -6,6 +6,7 @@ from app.routers.search import router as search_router
 from app.routers.chat import router as chat_router
 from app.routers.agent import router as agent_router
 from app.routers.langgraph_agent import router as agent_langgraph_router
+from app.routers.multi_agent import router as multi_agent_router
 
 app = FastAPI(title="Agentic Copilot API")
 
@@ -16,3 +17,4 @@ app.include_router(search_router)
 app.include_router(chat_router)
 app.include_router(agent_router)
 app.include_router(agent_langgraph_router)
+app.include_router(multi_agent_router)

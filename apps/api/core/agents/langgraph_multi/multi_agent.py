@@ -25,5 +25,6 @@ def build_initial_state(query: str, max_steps: int = 8) -> MultiAgentState:
         step_count=0,
         max_steps=max_steps,
         final_answer=None,
+        draft_answer=None,
         error=None,
     )

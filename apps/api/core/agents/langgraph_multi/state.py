@@ -11,6 +11,7 @@ from langgraph.graph.message import add_messages
 
 RouteTarget = Literal["research", "math", "finish"]
 
+
 # TypedDict means it will behave like a dictionary with {key: item, ...}
 class WorkerOutput(TypedDict, total=False):
     """Standard output cnotract every worker must write"""
@@ -42,11 +43,11 @@ class MultiAgentState(TypedDict):
     # This syntax means: t his field has a normal Python type (list[BaseMsg]), plus extra metadata (add_messages)”
     # So if current state has messages = [HumanMessage("Hi")]
     # and a node returns {"messages": [AIMessage("Hello")]}
-    # LangGraph merges them into: 
+    # LangGraph merges them into:
     # messages = [
     # HumanMessage("Hi"),
     # AIMessage("Hello")
-    # ] 
+    # ]
     messages: Annotated[list[BaseMessage], add_messages]
 
     # User input
@@ -70,4 +71,5 @@ class MultiAgentState(TypedDict):
 
     # Finalization
     final_answer: str | None
+    draft_answer: str | None
     error: str | None
