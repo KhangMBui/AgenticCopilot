@@ -14,56 +14,48 @@ math -> supervisor
 finish -> END
 """
 
-from __future__ import annotations
-
 # Lets us use newer type-hint behavior more cleanly.
 # Helps with forward references in type hints.
-
-from typing import Literal
+from __future__ import annotations
 
 # Literal means a function can only return specific exact string values.
 # Example:
 # Literal["research", "math", "finish"]
 # means ONLY those 3 strings are valid return values.
-
-from langchain_core.messages import AIMessage
+from typing import Literal
 
 # AIMessage is the message object used in LangChain / LangGraph conversation history.
-
-from langgraph.graph import START, END, StateGraph
+from langchain_core.messages import AIMessage
 
 # START and END are special graph markers.
 # StateGraph is the graph object where we register nodes and edges.
-
-from sqlalchemy.orm import Session
+from langgraph.graph import START, END, StateGraph
 
 # SQLAlchemy DB session type. The research worker needs DB access.
-
-from core.agents.langgraph_multi.state import MultiAgentState
+from sqlalchemy.orm import Session
 
 # Shared state schema for the whole graph.
 # This is the "big dictionary" that all nodes read from and write to.
-
-from core.agents.langgraph_multi.multi_agent import build_initial_state
+from core.agents.langgraph_multi.state import MultiAgentState
 
 # Helper function that creates the starting state before graph execution.
-
-from core.agents.langgraph_multi.supervisor import decide_route
+from core.agents.langgraph_multi.multi_agent import build_initial_state
 
 # Function that contains the supervisor's routing logic.
 # It should decide whether to send the task to research, math, or finish.
-
-from core.agents.langgraph_multi.research import create_research_worker
+from core.agents.langgraph_multi.supervisor import decide_route
 
 # Factory function that creates the research worker node.
-
-from core.agents.langgraph_multi.math import create_math_worker
+from core.agents.langgraph_multi.research import create_research_worker
 
 # Factory function that creates the math worker node.
+from core.agents.langgraph_multi.math import create_math_worker
 
-from core.embeddings import OpenAIEmbeddingsClient
+# Grounded final-answer aggregation for final node.
+from core.agents.langgraph_multi.aggregator import compose_grounded_answer
 
 # Embeddings client, likely used by the research worker for retrieval / semantic search.
+from core.embeddings import OpenAIEmbeddingsClient
 
 
 def create_supervisor_node():
@@ -126,49 +118,23 @@ def create_supervisor_node():
 
 def finish_node(state: MultiAgentState) -> dict:
     """
-    Final node of Phase 3.
-
-    Job:
-    - collect outputs from workers already stored in state
-    - combine them into one final answer
-    - store that final answer in state
-    - add a finish trace entry
-
-    Note:
-    - This is intentionally simple right now.
-    - Later phases can make this more grounded / cleaner / more polished.
+    Phase 4 finish node: grounded aggregation.
     """
+    final = compose_grounded_answer(state)
 
-    # Grab all research notes collected so far.
-    research = state.get("research_notes", [])
-
-    # Grab all math results collected so far.
-    math = state.get("math_results", [])
-
-    # We’ll build the final answer piece by piece.
-    parts: list[str] = []
-    if research:
-        # If research notes exist, only use the latest one.
-        # research[-1] = last item in the list
-        parts.append("Research context:\n" + research[-1])
-    if math:
-        # If math results exist, combine them into one comma-separated line.
-        parts.append("Math result(s): " + ", ".join(math))
-
-    # Join all answer parts with a blank line in between.
-    # strip() removes extra whitespace.
-    # If parts ended up empty, use fallback message.
-    final = "\n\n".join(parts).strip() or "No worker output available."
     return {
-        # Save the final answer into state.
         "final_answer": final,
-        # Also append the final answer into the message history.
         "messages": [AIMessage(content=final)],
-        # Add a finish entry into trace for observability.
         "trace": [
-            {"node": "finish", "step": state.get("step_count", 0), "success": True}
+            {
+                "node": "finish",
+                "step": state.get("step_count", 0),
+                "success": True,
+                "grounded": True,
+            }
         ],
     }
+
 
 def route_from_supervisor(
     state: MultiAgentState,
