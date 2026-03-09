@@ -124,6 +124,9 @@ def create_writer_node(api_key: str):
 
     def writer_node(state: MultiAgentState) -> dict:
         draft = state.get("draft_answer") or ""
+
+        print("Draft answer: ", draft)
+
         query = state["query"]
 
         prompt = f"""

@@ -20,19 +20,46 @@ def create_research_worker(
     """
     Factory returning a LangGraph-compatible node function
     """
-    retrieve_tool = RetrieveTool(
-        db=db, embeddings_client=embeddings, workspace_id=workspace_id
-    )
+    retrieve_tool = RetrieveTool(db, embeddings, workspace_id)
 
     def research_worker(state: MultiAgentState) -> dict:
         step = state.get("step_count", 0) + 1
         query = state["query"]
 
-        result = retrieve_tool.execute(query=query)
+        try:
+            result = retrieve_tool.execute(query=query)
+        except Exception as e:
+            err = f"Retrieve exception: {type(e).__name__}: {e}"
+            return {
+                "worker_outputs": [
+                    {
+                        "worker_name": "research",
+                        "success": False,
+                        "content": "",
+                        "sources": [],
+                        "error": err,
+                        "step": step,
+                    }
+                ],
+                "trace": [
+                    {
+                        "step": step,
+                        "node": "research_worker",
+                        "success": False,
+                        "error": err,
+                    }
+                ],
+                "step_count": step,
+            }
+        text = (result.output or "").strip() if isinstance(result.output, str) else ""
 
-        if result.success:
+        no_hit = not text or "No relevant information found" in text
+
+        if result.success and not no_hit:
             content = result.output or ""
-            note = content[:1200]  # Keep memory bounded, what does this mean?
+            note = content[
+                :1200
+            ]  # Keep memory bounded, what does this mean? It truncates saved context to 1200 chars so graph state does not grow too large across loops
             worker_output: WorkerOutput = {
                 "worker_name": "research",
                 "success": True,
@@ -54,12 +81,17 @@ def create_research_worker(
                         "node": "research_worker",
                         "success": True,
                         "query": query,
+                        "result_success": result.success,
                     }
                 ],
                 "step_count": step,
             }
 
-        err = result.error or "Unknown retrieve error"
+        err = (
+            (result.error or "").strip()
+            or (text if text else "")
+            or "Retrieve failed: no error details from tool"
+        )
         worker_output = {
             "worker_name": "research",
             "success": False,
@@ -78,10 +110,11 @@ def create_research_worker(
                     "success": False,
                     "query": query,
                     "error": err,
+                    "result_success": result.success,
+                    "result_output_preview": text[:200],
                 }
             ],
             "step_count": step,
-            "error": err,
         }
 
     return research_worker

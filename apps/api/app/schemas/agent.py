@@ -36,6 +36,7 @@ class AgentResponse(BaseModel):
     run_id: int
     query: str
     status: str
+    # draft_asnwer: str | None
     final_answer: str | None
     error: str | None
     steps: list[AgentStepResponse]

@@ -39,10 +39,29 @@ def decide_route(state: MultiAgentState) -> SupervisorDecision:
     if step_count >= max_steps:
         return {"route_to": "finish", "reason": "Reached max_steps guardrail"}
 
+    failed_research_attempts = sum(
+        1
+        for w in state.get("worker_outputs", [])
+        if w.get("worker_name") == "research" and not w.get("success", False)
+    )
+
+    if failed_research_attempts >= 2:
+        return {
+            "route_to": "finish",
+            "reason": "Research failed repeatedly; finishing with grounded fallback",
+        }
+
     query = state["query"]
-    has_research = len(state.get("research_notes", [])) > 0
+    # has_research = len(state.get("research_notes", [])) > 0
     has_math = len(state.get("math_results", [])) > 0
     needs_math = _looks_math_query(query)
+
+    has_grounded_research = any(
+        w.get("worker_name") == "research"
+        and w.get("success") is True
+        and (w.get("content") or "").strip()
+        for w in state.get("worker_outputs", [])
+    )
 
     if needs_math and not has_math:
         return {
@@ -50,10 +69,10 @@ def decide_route(state: MultiAgentState) -> SupervisorDecision:
             "reason": "Query appears math-heavy and no math result yet",
         }
 
-    if not has_research:
+    if not has_grounded_research:
         return {
             "route_to": "research",
-            "reason": "Need retrieval grounding before final answer",
+            "reason": "Need grounded retrieval before final answer",
         }
 
     return {"route_to": "finish", "reason": "Sufficient context collected"}

@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.routers.health import router as health_router
 from app.routers.documents import router as documents_router
 from app.routers.workspaces import router as workspaces_router
@@ -9,6 +11,18 @@ from app.routers.langgraph_agent import router as agent_langgraph_router
 from app.routers.multi_agent import router as multi_agent_router
 
 app = FastAPI(title="Agentic Copilot API")
+
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:4200",  # Angular dev server
+        "http://127.0.0.1:4200",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(health_router)
 app.include_router(workspaces_router)
